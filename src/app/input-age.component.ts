@@ -2,15 +2,29 @@ import {
   Component,
   ElementRef,
   forwardRef,
+  Input,
   input,
   output,
   signal,
   viewChild,
 } from '@angular/core';
-import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
+import {
+  AbstractControl,
+  ControlValueAccessor,
+  NG_VALIDATORS,
+  NG_VALUE_ACCESSOR,
+  ValidationErrors,
+  Validator,
+} from '@angular/forms';
 
 const VALUE_ACCESSOR = {
   provide: NG_VALUE_ACCESSOR,
+  useExisting: forwardRef(() => InputAgeComponent),
+  multi: true,
+};
+
+const NG_VALIDATOR = {
+  provide: NG_VALIDATORS,
   useExisting: forwardRef(() => InputAgeComponent),
   multi: true,
 };
@@ -38,9 +52,23 @@ const VALUE_ACCESSOR = {
         opacity: 0.5;
     }
   `,
-  providers: [VALUE_ACCESSOR],
+  providers: [VALUE_ACCESSOR, NG_VALIDATOR],
 })
-export class InputAgeComponent implements ControlValueAccessor {
+export class InputAgeComponent implements ControlValueAccessor, Validator {
+  // Add a maximum length input property
+  private _maxLength: number | null = null;
+
+  @Input() set maxLength(value: number | null) {
+    this._maxLength = value;
+
+    // Trigger validator change when maxLength changes
+    this._onValidatorChange();
+  }
+
+  get maxLength(): number | null {
+    return this._maxLength;
+  }
+
   disabled = signal<boolean>(false);
 
   value = signal<string>('');
@@ -50,6 +78,8 @@ export class InputAgeComponent implements ControlValueAccessor {
   onChange: (value: string) => void = () => {};
 
   onTouched: () => void = () => {};
+
+  private _onValidatorChange = () => {};
 
   _onInput(event: Event) {
     const target = event.target as HTMLInputElement;
@@ -77,5 +107,30 @@ export class InputAgeComponent implements ControlValueAccessor {
 
   setDisabledState?(isDisabled: boolean): void {
     this.disabled.set(isDisabled);
+  }
+
+  validate(control: AbstractControl): ValidationErrors | null {
+    const value = control.value;
+
+    if (!this.isValid(value)) {
+      return { invalidAge: 'Age must contain only digits.' };
+    }
+
+    if (this.maxLength !== null && value.length > this.maxLength) {
+      return {
+        maxLengthExceeded: `Age must be at most ${this.maxLength} characters long.`,
+      };
+    }
+
+    return null;
+  }
+
+  registerOnValidatorChange?(fn: () => void): void {
+    this._onValidatorChange = fn;
+  }
+
+  private isValid(value: string): boolean {
+    const regex = /^\d+$/;
+    return regex.test(value);
   }
 }
